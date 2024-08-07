@@ -1,6 +1,8 @@
 package com.noxis.audiorecorder
 
 import android.Manifest
+import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -10,66 +12,97 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.core.app.ActivityCompat
-import com.noxis.audiorecorder.playback.AndroidAudioPlayer
-import com.noxis.audiorecorder.recorder.AndroidAudioRecorder
 import com.noxis.audiorecorder.ui.theme.AudioRecorderTheme
-import java.io.File
+import com.noxis.audiorecorder.service.MyService
 
 class MainActivity : ComponentActivity() {
 
-    private val recorder by lazy {
-        AndroidAudioRecorder(applicationContext)
-    }
-
-    private val player by lazy {
-        AndroidAudioPlayer(applicationContext)
-    }
-
-    private var audioFile: File? = null
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         ActivityCompat.requestPermissions(
             this,
-            arrayOf(Manifest.permission.RECORD_AUDIO),
+            arrayOf(
+                Manifest.permission.RECORD_AUDIO,
+                Manifest.permission.POST_NOTIFICATIONS,
+                Manifest.permission.FOREGROUND_SERVICE_MICROPHONE
+            ),
             0
         )
         enableEdgeToEdge()
         setContent {
+            var stateRecord by remember { mutableStateOf(true) }
+            var statePlay by remember { mutableStateOf(true) }
             AudioRecorderTheme {
                 Column(
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Button(onClick = {
-                        File(cacheDir, "audio.mp3").also {
-                            recorder.start(it)
-                            audioFile = it
-                        }
-                    }) {
+                    Button(
+                        enabled = stateRecord,
+                        onClick = {
+                            stateRecord = !stateRecord
+                            Intent(applicationContext, MyService::class.java).also { intent ->
+                                intent.action = MyService.Actions.START_RECORD.name
+                                startService(intent)
+                            }
+
+                        }) {
                         Text(text = "Start recording")
                     }
-                    Button(onClick = {
-                        recorder.stop()
-                    }) {
+                    Button(
+                        enabled = !stateRecord,
+                        onClick = {
+                            stateRecord = !stateRecord
+                            Intent(applicationContext, MyService::class.java).also { intent ->
+                                intent.action = MyService.Actions.STOP_RECORD.name
+                                startService(intent)
+                            }
+
+                        }) {
                         Text(text = "Stop recording")
                     }
-                    Button(onClick = {
-                        player.playFile(audioFile ?: return@Button)
-                    }) {
+                    Button(
+                        enabled = statePlay,
+                        onClick = {
+                            statePlay = !statePlay
+                            Intent(applicationContext, MyService::class.java).also { intent ->
+                                intent.action = MyService.Actions.START_PLAY.name
+                                startService(intent)
+                            }
+
+                        }) {
                         Text(text = "Play")
                     }
-                    Button(onClick = {
-                        player.stop()
-                    }) {
+                    Button(
+                        enabled = !statePlay,
+                        onClick = {
+                            statePlay = !statePlay
+                            Intent(applicationContext, MyService::class.java).also { intent ->
+                                intent.action = MyService.Actions.STOP_PLAY.name
+                                startService(intent)
+                            }
+                        }) {
                         Text(text = "Stop playing")
                     }
                 }
             }
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        Intent(applicationContext, MyService::class.java).also { intent ->
+            intent.action = MyService.Actions.STOP_SERVICE.name
+            startService(intent)
         }
     }
 }
